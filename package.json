@@ -1,0 +1,15 @@
+{
+  "name": "call-analyser",
+  "version": "1.0.0",
+  "description": "AI Call Analyser — Whisper transcription + Claude Opus 4.6 lead qualification",
+  "main": "analyze.js",
+  "scripts": {
+    "start": "node analyze.js",
+    "report": "node analyze.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "openai": "^4.77.0",
+    "dotenv": "^16.4.7"
+  }
+}
