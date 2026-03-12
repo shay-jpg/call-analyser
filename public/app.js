@@ -203,6 +203,20 @@ async function renderNewAnalysis() {
     </button>
 
     <div class="prompt-section" id="prompt-section">
+      <div class="prompt-toolbar">
+        <div class="prompt-select-wrap">
+          <select id="prompt-select" onchange="loadSavedPrompt()">
+            <option value="">— Select a saved prompt —</option>
+          </select>
+          <button class="btn-icon" id="delete-prompt-btn" title="Delete selected prompt" onclick="deleteSavedPrompt()" style="display:none">🗑</button>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="showSavePrompt()">Save current prompt</button>
+      </div>
+      <div id="save-prompt-form" style="display:none" class="save-prompt-form">
+        <input type="text" id="prompt-name-input" placeholder="Prompt name (e.g. A&G Insurance)">
+        <button class="btn btn-primary btn-sm" onclick="confirmSavePrompt()">Save</button>
+        <button class="btn btn-secondary btn-sm" onclick="hideSavePrompt()">Cancel</button>
+      </div>
       <div class="form-group">
         <label>System Prompt — controls how AI analyzes each call</label>
         <textarea id="system-prompt" class="mono" style="min-height:300px">${esc(defaultPrompt)}</textarea>
@@ -226,6 +240,9 @@ async function renderNewAnalysis() {
   }
 
   urlsEl.addEventListener('input', updateCount);
+
+  // Load saved prompts into dropdown
+  loadSavedPromptsList();
 
   btn.onclick = async () => {
     btn.disabled = true;
@@ -257,6 +274,82 @@ function togglePrompt() {
   const toggle = document.getElementById('prompt-toggle');
   const isOpen = section.classList.toggle('open');
   toggle.textContent = (isOpen ? '▼' : '▶') + ' Customize analysis prompt';
+}
+
+async function loadSavedPromptsList() {
+  try {
+    const prompts = await apiJSON('/jobs/prompts/list');
+    const select = document.getElementById('prompt-select');
+    if (!select) return;
+    // Keep first placeholder option, replace the rest
+    select.innerHTML = '<option value="">— Select a saved prompt —</option>';
+    prompts.forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p.id;
+      opt.textContent = p.name;
+      opt.dataset.content = p.content;
+      select.appendChild(opt);
+    });
+  } catch (e) {}
+}
+
+function loadSavedPrompt() {
+  const select = document.getElementById('prompt-select');
+  const deleteBtn = document.getElementById('delete-prompt-btn');
+  const selected = select.options[select.selectedIndex];
+  if (!selected || !selected.value) {
+    deleteBtn.style.display = 'none';
+    return;
+  }
+  document.getElementById('system-prompt').value = selected.dataset.content;
+  deleteBtn.style.display = 'inline-flex';
+}
+
+function showSavePrompt() {
+  document.getElementById('save-prompt-form').style.display = 'flex';
+  document.getElementById('prompt-name-input').focus();
+}
+
+function hideSavePrompt() {
+  document.getElementById('save-prompt-form').style.display = 'none';
+  document.getElementById('prompt-name-input').value = '';
+}
+
+async function confirmSavePrompt() {
+  const name = document.getElementById('prompt-name-input').value.trim();
+  const content = document.getElementById('system-prompt').value;
+  if (!name) { document.getElementById('prompt-name-input').focus(); return; }
+  try {
+    await apiJSON('/jobs/prompts', {
+      method: 'POST',
+      body: JSON.stringify({ name, content })
+    });
+    hideSavePrompt();
+    await loadSavedPromptsList();
+    // Auto-select the newly saved prompt
+    const select = document.getElementById('prompt-select');
+    for (const opt of select.options) {
+      if (opt.textContent === name) { select.value = opt.value; break; }
+    }
+    document.getElementById('delete-prompt-btn').style.display = 'inline-flex';
+  } catch (e) {
+    alert('Failed to save prompt');
+  }
+}
+
+async function deleteSavedPrompt() {
+  const select = document.getElementById('prompt-select');
+  const id = select.value;
+  if (!id) return;
+  if (!confirm(`Delete prompt "${select.options[select.selectedIndex].textContent}"?`)) return;
+  try {
+    await api(`/jobs/prompts/${id}`, { method: 'DELETE' });
+    select.value = '';
+    document.getElementById('delete-prompt-btn').style.display = 'none';
+    await loadSavedPromptsList();
+  } catch (e) {
+    alert('Failed to delete prompt');
+  }
 }
 
 // ─── Results ──────────────────────────────────────────────────────

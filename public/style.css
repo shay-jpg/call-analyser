@@ -174,6 +174,57 @@ textarea.urls { min-height: 200px; }
 
 .url-count { font-size: 12px; color: var(--text-dim); margin-top: 4px; }
 
+/* ─── Saved prompts toolbar ────────────────────────────────── */
+.prompt-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.prompt-select-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 200px;
+}
+
+.prompt-select-wrap select {
+  flex: 1;
+  padding: 7px 10px;
+  font-size: 13px;
+}
+
+.btn-icon {
+  background: none;
+  border: 1px solid var(--surface2);
+  border-radius: 6px;
+  color: var(--red);
+  cursor: pointer;
+  padding: 5px 8px;
+  font-size: 14px;
+  line-height: 1;
+  transition: background 0.15s;
+}
+.btn-icon:hover { background: rgba(239,68,68,0.1); }
+
+.save-prompt-form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.save-prompt-form input {
+  flex: 1;
+  min-width: 180px;
+  padding: 7px 10px;
+  font-size: 13px;
+}
+
 /* ─── Table ────────────────────────────────────────────────── */
 .table-wrap {
   background: var(--surface);

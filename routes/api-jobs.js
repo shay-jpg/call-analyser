@@ -98,4 +98,25 @@ router.delete('/:id', (req, res) => {
   res.json({ ok: true });
 });
 
+// ─── Saved Prompts ────────────────────────────────────────────────
+
+// List saved prompts
+router.get('/prompts/list', (req, res) => {
+  res.json(db.listPrompts());
+});
+
+// Save a prompt
+router.post('/prompts', (req, res) => {
+  const { name, content } = req.body;
+  if (!name || !content) return res.status(400).json({ error: 'name and content required' });
+  const prompt = db.createPrompt({ id: uuid(), name: name.trim(), content });
+  res.status(201).json(prompt);
+});
+
+// Delete a prompt
+router.delete('/prompts/:id', (req, res) => {
+  db.deletePrompt(req.params.id);
+  res.json({ ok: true });
+});
+
 module.exports = router;
