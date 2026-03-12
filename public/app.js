@@ -211,12 +211,14 @@ async function renderNewAnalysis() {
           <button class="btn-icon" id="delete-prompt-btn" title="Delete selected prompt" onclick="deleteSavedPrompt()" style="display:none">🗑</button>
         </div>
         <button class="btn btn-secondary btn-sm" onclick="showSavePrompt()">Save current prompt</button>
+        <button class="btn btn-secondary btn-sm" id="optimize-btn" onclick="optimizePrompt()">✨ Optimize with AI</button>
       </div>
       <div id="save-prompt-form" style="display:none" class="save-prompt-form">
         <input type="text" id="prompt-name-input" placeholder="Prompt name (e.g. A&G Insurance)">
         <button class="btn btn-primary btn-sm" onclick="confirmSavePrompt()">Save</button>
         <button class="btn btn-secondary btn-sm" onclick="hideSavePrompt()">Cancel</button>
       </div>
+      <div id="optimize-panel" style="display:none" class="optimize-panel"></div>
       <div class="form-group">
         <label>System Prompt — controls how AI analyzes each call</label>
         <textarea id="system-prompt" class="mono" style="min-height:300px">${esc(defaultPrompt)}</textarea>
@@ -391,6 +393,66 @@ async function deleteSavedPrompt() {
   } catch (e) {
     alert('Failed to delete prompt');
   }
+}
+
+async function optimizePrompt() {
+  const prompt = document.getElementById('system-prompt')?.value || '';
+  const panel = document.getElementById('optimize-panel');
+  const btn = document.getElementById('optimize-btn');
+  if (!panel || !prompt.trim()) return;
+
+  btn.disabled = true;
+  btn.textContent = '⏳ Analyzing...';
+  panel.style.display = 'block';
+  panel.innerHTML = '<div class="optimize-loading"><span class="spinner"></span> AI is analyzing your prompt for issues...</div>';
+
+  try {
+    const data = await apiJSON('/jobs/optimize-prompt', {
+      method: 'POST',
+      body: JSON.stringify({ prompt })
+    });
+
+    if (!data.suggestions || data.suggestions.length === 0) {
+      panel.innerHTML = '<div class="optimize-empty">✓ Your prompt looks good — no major issues found.</div>';
+    } else {
+      panel.innerHTML = `
+        <div class="optimize-header">
+          <strong>✨ ${data.suggestions.length} suggestions to improve your prompt</strong>
+          <button class="btn-close-optimize" onclick="document.getElementById('optimize-panel').style.display='none'">✕</button>
+        </div>
+        ${data.suggestions.map((s, i) => `
+          <div class="optimize-card" id="opt-card-${i}">
+            <div class="optimize-card-title">${esc(s.title)}</div>
+            <div class="optimize-card-issue">${esc(s.issue)}</div>
+            <div class="optimize-card-fix"><strong>Suggested fix:</strong> ${esc(s.fix)}</div>
+            <div class="optimize-card-actions">
+              <button class="btn btn-primary btn-sm" onclick="applyOptimization(${i}, ${JSON.stringify(s.fix).replace(/</g,'&lt;')})">Apply</button>
+              <button class="btn btn-secondary btn-sm" onclick="document.getElementById('opt-card-${i}').remove()">Dismiss</button>
+            </div>
+          </div>
+        `).join('')}
+      `;
+    }
+  } catch (e) {
+    panel.innerHTML = '<div class="optimize-empty" style="color:var(--red)">Failed to get suggestions. Try again.</div>';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '✨ Optimize with AI';
+  }
+}
+
+function applyOptimization(idx, fix) {
+  const textarea = document.getElementById('system-prompt');
+  if (!textarea) return;
+  textarea.value = textarea.value.trimEnd() + '\n\n' + fix;
+  document.getElementById(`opt-card-${idx}`)?.remove();
+  // Show a quick confirmation
+  const panel = document.getElementById('optimize-panel');
+  const confirmation = document.createElement('div');
+  confirmation.className = 'optimize-applied';
+  confirmation.textContent = '✓ Applied';
+  panel.insertBefore(confirmation, panel.firstChild);
+  setTimeout(() => confirmation.remove(), 2000);
 }
 
 // ─── Results ──────────────────────────────────────────────────────
@@ -611,6 +673,8 @@ async function renderTranscript(recId) {
 
         <div class="analysis-grid">
           ${field('Status', a.lead_status || '-')}
+          ${rec.model_used ? field('Model Used', rec.model_used) : ''}
+          ${rec.processing_ms ? field('Processing Time', (rec.processing_ms / 1000).toFixed(1) + 's') : ''}
           ${field('Reason', a.status_reason || '-')}
           ${field('Prospect', a.prospect_name || '-')}
           ${field('Vehicle', a.vehicle_make || '-')}

@@ -2,6 +2,8 @@ const express = require('express');
 const { v4: uuid } = require('uuid');
 const db = require('../lib/db');
 const { DEFAULT_SYSTEM_PROMPT, processJob, cancelJob, addSSEClient, removeSSEClient } = require('../lib/processor');
+const Anthropic = require('@anthropic-ai/sdk').default;
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 const router = express.Router();
 
@@ -120,6 +122,51 @@ router.post('/prompts', (req, res) => {
 router.delete('/prompts/:id', (req, res) => {
   db.deletePrompt(req.params.id);
   res.json({ ok: true });
+});
+
+// Optimize a prompt using AI
+router.post('/optimize-prompt', async (req, res) => {
+  const { prompt } = req.body;
+  if (!prompt || prompt.trim().length < 20) {
+    return res.status(400).json({ error: 'Prompt too short to optimize' });
+  }
+
+  try {
+    const msg = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 1500,
+      system: `You are an expert at writing system prompts for AI-powered call analysis systems.
+Your job is to analyze a system prompt and give 3-5 specific, actionable improvement suggestions.
+
+Key things to check:
+1. Are qualification criteria UNAMBIGUOUS? Vague criteria cause inconsistent results.
+2. Does it guard against over-analysis? Advanced AI models can be overly strict — the prompt should be explicit about borderline cases.
+3. Are all edge cases covered? (short calls, language barriers, partial info)
+4. Is the OUTPUT FORMAT crystal clear with no room for interpretation?
+5. Are there contradictions or conflicting rules?
+
+Return ONLY a JSON array, no markdown, no extra text:
+[
+  {
+    "title": "5-8 word title of the issue",
+    "issue": "1-2 sentences: what's the problem and why it causes inconsistency",
+    "fix": "The exact text or instruction to add/change in the prompt"
+  }
+]`,
+      messages: [{
+        role: 'user',
+        content: `Analyze this call analysis system prompt and suggest improvements:\n\n---\n${prompt.substring(0, 4000)}\n---`
+      }]
+    });
+
+    const text = msg.content[0].text.trim();
+    const cleaned = text.replace(/^```json?\s*/i, '').replace(/\s*```$/i, '').trim();
+    const suggestions = JSON.parse(cleaned);
+    res.json({ suggestions });
+  } catch (err) {
+    console.error('[OPTIMIZE] Error:', err.message);
+    res.status(500).json({ error: 'Failed to generate suggestions' });
+  }
 });
 
 module.exports = router;

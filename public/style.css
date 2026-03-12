@@ -582,6 +582,87 @@ tr:hover td { background: rgba(96, 165, 250, 0.04); }
 
 .back-link:hover { color: var(--text); text-decoration: none; }
 
+/* ─── Prompt optimizer panel ───────────────────────────────── */
+.optimize-panel {
+  margin-bottom: 14px;
+  border: 1px solid rgba(139,92,246,0.3);
+  border-radius: 10px;
+  overflow: hidden;
+  font-size: 13px;
+}
+
+.optimize-loading,
+.optimize-empty {
+  padding: 14px 16px;
+  color: var(--text-dim);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.optimize-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: rgba(139,92,246,0.1);
+  color: var(--purple);
+  border-bottom: 1px solid rgba(139,92,246,0.2);
+}
+
+.btn-close-optimize {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.btn-close-optimize:hover { background: var(--surface2); }
+
+.optimize-card {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--surface2);
+  background: var(--surface);
+}
+.optimize-card:last-child { border-bottom: none; }
+
+.optimize-card-title {
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.optimize-card-issue {
+  color: var(--text-dim);
+  margin-bottom: 8px;
+  line-height: 1.5;
+}
+
+.optimize-card-fix {
+  background: var(--surface2);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 12px;
+  color: var(--text);
+  margin-bottom: 10px;
+  line-height: 1.5;
+}
+
+.optimize-card-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.optimize-applied {
+  padding: 8px 16px;
+  background: rgba(34,197,94,0.1);
+  color: var(--green);
+  font-weight: 600;
+  font-size: 12px;
+}
+
 /* ─── Responsive ───────────────────────────────────────────── */
 @media (max-width: 768px) {
   .container { padding: 16px; }
