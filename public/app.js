@@ -193,9 +193,9 @@ async function renderNewAnalysis() {
     </div>
 
     <div class="form-group">
-      <label>Recording URLs — paste all at once, one per line</label>
-      <textarea id="urls" class="urls" placeholder="https://example.com/recording1.wav&#10;https://example.com/recording2.wav&#10;https://example.com/recording3.wav&#10;..."></textarea>
-      <div class="url-count" id="url-count">0 URLs detected</div>
+      <label>Recording URLs — paste anything: one per line, space-separated, from Excel, emails, anywhere</label>
+      <textarea id="urls" class="urls" placeholder="Paste your recording URLs here in any format — one per line, space-separated, comma-separated, copied from a spreadsheet... we'll extract them all automatically."></textarea>
+      <div id="url-preview"></div>
     </div>
 
     <button class="prompt-toggle" id="prompt-toggle" onclick="togglePrompt()">
@@ -230,28 +230,69 @@ async function renderNewAnalysis() {
   `);
 
   const urlsEl = document.getElementById('urls');
-  const countEl = document.getElementById('url-count');
+  const previewEl = document.getElementById('url-preview');
   const btn = document.getElementById('analyze-btn');
 
-  function updateCount() {
-    const count = urlsEl.value.split('\n').filter(u => u.trim().startsWith('http')).length;
-    countEl.textContent = `${count} URL${count !== 1 ? 's' : ''} detected`;
-    btn.disabled = count === 0;
+  function smartExtractUrls(text) {
+    const raw = text.match(/https?:\/\/[^\s\t\n\r,"'<>()\[\]{}\\]+/gi) || [];
+    // Deduplicate + trim trailing punctuation
+    return [...new Set(raw.map(u => u.replace(/[.,;:!?)\]]+$/, '')))];
   }
 
-  urlsEl.addEventListener('input', updateCount);
+  function updatePreview() {
+    const urls = smartExtractUrls(urlsEl.value);
+    const count = urls.length;
+    btn.disabled = count === 0;
+
+    if (!urlsEl.value.trim()) {
+      previewEl.innerHTML = '';
+      return;
+    }
+
+    const rawCount = (urlsEl.value.match(/https?:\/\//gi) || []).length;
+    const dupes = rawCount - count;
+
+    let html = `<div class="url-preview-card ${count > 0 ? 'has-urls' : 'no-urls'}">`;
+    if (count === 0) {
+      html += `<div class="url-preview-count url-none">⚠ No URLs detected — make sure links start with https://</div>`;
+    } else {
+      html += `<div class="url-preview-count">✓ <strong>${count}</strong> recording URL${count !== 1 ? 's' : ''} found`;
+      if (dupes > 0) html += ` <span class="url-dupe-badge">${dupes} duplicate${dupes !== 1 ? 's' : ''} removed</span>`;
+      html += `</div>`;
+      // Show first 3 + last 1 as sample
+      const preview = count <= 5 ? urls : [...urls.slice(0, 3), null, urls[urls.length - 1]];
+      html += `<div class="url-preview-list">`;
+      preview.forEach(u => {
+        if (u === null) {
+          html += `<div class="url-preview-more">... ${count - 4} more URLs ...</div>`;
+        } else {
+          const short = u.split('/').slice(-1)[0] || u;
+          html += `<div class="url-preview-item" title="${esc(u)}">📎 ${esc(short.length > 60 ? short.substring(0, 60) + '…' : short)}</div>`;
+        }
+      });
+      html += `</div>`;
+    }
+    html += `</div>`;
+    previewEl.innerHTML = html;
+  }
+
+  urlsEl.addEventListener('input', updatePreview);
+  urlsEl.addEventListener('paste', () => setTimeout(updatePreview, 50));
 
   // Load saved prompts into dropdown
   loadSavedPromptsList();
 
   btn.onclick = async () => {
+    const urls = smartExtractUrls(urlsEl.value);
+    if (urls.length === 0) return;
+
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinner"></span> Creating job...';
+    btn.innerHTML = `<span class="spinner"></span> Starting analysis of ${urls.length} recordings...`;
 
     try {
       const body = {
         name: document.getElementById('job-name').value || undefined,
-        urls: urlsEl.value,
+        urls: urls.join('\n'),
         systemPrompt: document.getElementById('system-prompt')?.value || undefined
       };
 

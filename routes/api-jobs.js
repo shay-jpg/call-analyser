@@ -24,10 +24,12 @@ router.post('/', (req, res) => {
     return res.status(400).json({ error: 'urls is required (one URL per line)' });
   }
 
-  const urlList = urls.split('\n').map(u => u.trim()).filter(u => u && u.startsWith('http'));
+  // Smart extraction: find all http/https URLs regardless of separator (spaces, newlines, tabs, commas, etc.)
+  const rawMatches = urls.match(/https?:\/\/[^\s\t\n\r,"'<>()\[\]{}\\]+/gi) || [];
+  const urlList = [...new Set(rawMatches.map(u => u.replace(/[.,;:!?)]+$/, '')))]; // dedupe + trim trailing punctuation
 
   if (urlList.length === 0) {
-    return res.status(400).json({ error: 'No valid URLs found' });
+    return res.status(400).json({ error: 'No valid URLs found. Make sure URLs start with http:// or https://' });
   }
 
   const jobId = uuid();

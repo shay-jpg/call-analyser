@@ -172,7 +172,65 @@ textarea { resize: vertical; min-height: 120px; }
 textarea.mono { font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace; font-size: 12px; line-height: 1.5; }
 textarea.urls { min-height: 200px; }
 
-.url-count { font-size: 12px; color: var(--text-dim); margin-top: 4px; }
+/* ─── URL preview card ─────────────────────────────────────── */
+.url-preview-card {
+  margin-top: 10px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--surface2);
+  font-size: 13px;
+}
+
+.url-preview-card.has-urls { border-color: rgba(34,197,94,0.3); }
+.url-preview-card.no-urls  { border-color: rgba(245,158,11,0.4); }
+
+.url-preview-count {
+  padding: 10px 14px;
+  background: rgba(34,197,94,0.08);
+  color: var(--green);
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.url-preview-count.url-none {
+  background: rgba(245,158,11,0.08);
+  color: var(--amber);
+}
+
+.url-dupe-badge {
+  background: rgba(245,158,11,0.15);
+  color: var(--amber);
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-weight: 600;
+}
+
+.url-preview-list {
+  border-top: 1px solid var(--surface2);
+  padding: 6px 0;
+  background: var(--surface);
+}
+
+.url-preview-item {
+  padding: 4px 14px;
+  font-size: 12px;
+  color: var(--text-dim);
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.url-preview-more {
+  padding: 4px 14px;
+  font-size: 12px;
+  color: var(--text-dim);
+  font-style: italic;
+  text-align: center;
+}
 
 /* ─── Saved prompts toolbar ────────────────────────────────── */
 .prompt-toolbar {
