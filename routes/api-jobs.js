@@ -49,11 +49,12 @@ router.post('/', (req, res) => {
   res.status(201).json(job);
 });
 
-// Get single job
+// Get single job (includes dynamic status breakdown)
 router.get('/:id', (req, res) => {
   const job = db.getJob(req.params.id);
   if (!job) return res.status(404).json({ error: 'Job not found' });
-  res.json(job);
+  const breakdown = db.getJobStatusBreakdown(req.params.id);
+  res.json({ ...job, breakdown });
 });
 
 // SSE events for a job

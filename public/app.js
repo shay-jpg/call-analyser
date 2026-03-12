@@ -414,7 +414,7 @@ async function renderResults(jobId) {
     const job = await apiJSON(`/jobs/${jobId}`);
     updateResultsHeader(job);
     updateResultsStats(job);
-    renderFilters(jobId);
+    renderFilters(jobId, job.breakdown);
     await loadRecordings(jobId, 1);
 
     // Connect SSE if job is running
@@ -448,33 +448,33 @@ function updateResultsHeader(job) {
 }
 
 function updateResultsStats(job) {
+  const breakdown = job.breakdown || [];
+  const statCards = breakdown.map(({ lead_status, count }) => {
+    const c = statusColor(lead_status);
+    return `<div class="stat"><div class="num" style="color:${c}">${count}</div><div class="label">${esc(lead_status)}</div></div>`;
+  }).join('');
   document.getElementById('results-stats').innerHTML = `
     <div class="stats">
-      <div class="stat"><div class="num" style="color:var(--green)">${job.qualified}</div><div class="label">Qualified</div></div>
-      <div class="stat"><div class="num" style="color:var(--red)">${job.disqualified}</div><div class="label">Disqualified</div></div>
-      <div class="stat"><div class="num" style="color:var(--amber)">${job.callback}</div><div class="label">Callback</div></div>
-      <div class="stat"><div class="num" style="color:var(--purple)">${job.dnc}</div><div class="label">DNC</div></div>
+      ${statCards}
       ${job.errors > 0 ? `<div class="stat"><div class="num" style="color:var(--red)">${job.errors}</div><div class="label">Errors</div></div>` : ''}
       <div class="stat"><div class="num">${job.total_urls}</div><div class="label">Total</div></div>
     </div>
   `;
 }
 
-function renderFilters(jobId) {
-  const filters = [
-    { label: 'All', value: null },
-    { label: 'Qualified', value: 'Qualified' },
-    { label: 'Disqualified', value: 'Disqualified' },
-    { label: 'Call Back Later', value: 'Call Back Later' },
-    { label: 'DNC', value: 'DNC' }
-  ];
-
+function renderFilters(jobId, breakdown) {
+  const statusList = (breakdown || []).map(b => b.lead_status);
   document.getElementById('results-filters').innerHTML = `
     <div class="filters">
-      ${filters.map(f => `
-        <button class="filter-pill${currentFilter === f.value ? ' active' : ''}"
-                onclick="setFilter('${jobId}', ${f.value ? "'" + f.value + "'" : 'null'})">${f.label}</button>
-      `).join('')}
+      <button class="filter-pill${currentFilter === null ? ' active' : ''}"
+              onclick="setFilter('${jobId}', null)">All</button>
+      ${statusList.map(s => {
+        const c = statusColor(s);
+        const active = currentFilter === s;
+        return `<button class="filter-pill${active ? ' active' : ''}"
+                  style="${active ? `background:${c}22;border-color:${c};color:${c}` : ''}"
+                  onclick="setFilter('${jobId}', '${s.replace(/'/g,"\\'")}'">${esc(s)}</button>`;
+      }).join('')}
     </div>
   `;
 }
@@ -563,10 +563,10 @@ function connectSSE(jobId) {
       const data = JSON.parse(e.data);
 
       if (data.type === 'progress') {
-        // Refresh job data
         const job = await apiJSON(`/jobs/${jobId}`);
         updateResultsHeader(job);
         updateResultsStats(job);
+        renderFilters(jobId, job.breakdown);
         loadRecordings(jobId, 1);
       }
 
@@ -574,6 +574,7 @@ function connectSSE(jobId) {
         const job = await apiJSON(`/jobs/${jobId}`);
         updateResultsHeader(job);
         updateResultsStats(job);
+        renderFilters(jobId, job.breakdown);
         loadRecordings(jobId, 1);
         if (currentSSE) { currentSSE.close(); currentSSE = null; }
       }
@@ -704,19 +705,28 @@ function badge(status) {
   return `<span class="badge ${cls}">${status}</span>`;
 }
 
+// ─── Dynamic status colours ────────────────────────────────────────
+const FIXED_STATUS_COLORS = {
+  'Qualified':       '#22c55e',
+  'Disqualified':    '#ef4444',
+  'Call Back Later': '#f59e0b',
+  'DNC':             '#8b5cf6',
+};
+const DYN_PALETTE = ['#06b6d4','#10b981','#f97316','#ec4899','#3b82f6','#14b8a6','#a855f7','#84cc16','#64748b'];
+
+function statusColor(status) {
+  if (FIXED_STATUS_COLORS[status]) return FIXED_STATUS_COLORS[status];
+  let h = 0;
+  for (const c of (status || '')) h = (h * 31 + c.charCodeAt(0)) & 0xffffffff;
+  return DYN_PALETTE[Math.abs(h) % DYN_PALETTE.length];
+}
+
 function leadBadge(status) {
-  const cls = {
-    'Qualified': 'badge-qualified',
-    'Disqualified': 'badge-disqualified',
-    'Call Back Later': 'badge-callback',
-    'DNC': 'badge-dnc',
-    'error': 'badge-error',
-    'pending': 'badge-pending',
-    'downloading': 'badge-running',
-    'transcribing': 'badge-running',
-    'analyzing': 'badge-running'
-  }[status] || 'badge-pending';
-  return `<span class="badge ${cls}">${status || 'pending'}</span>`;
+  const processing = ['pending','downloading','transcribing','analyzing'];
+  if (!status || processing.includes(status)) return `<span class="badge badge-running">${status || 'pending'}</span>`;
+  if (status === 'error') return `<span class="badge badge-error">error</span>`;
+  const c = statusColor(status);
+  return `<span class="badge" style="background:${c}22;color:${c};border:1px solid ${c}44">${esc(status)}</span>`;
 }
 
 function formatDate(dateStr) {

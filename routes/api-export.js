@@ -30,12 +30,29 @@ const COLOR_LIGHT_ROW = 'FFF8FAFC';
 const COLOR_WHITE = 'FFFFFFFF';
 const COLOR_BORDER = 'FFE2E8F0';
 
-const STATUS_COLORS = {
-  'Qualified':       { bg: 'FFDCFCE7', text: 'FF166534' },
-  'Disqualified':    { bg: 'FFFEE2E2', text: 'FF991B1B' },
-  'Call Back Later':  { bg: 'FFFEF3C7', text: 'FF92400E' },
-  'DNC':             { bg: 'FFEDE9FE', text: 'FF5B21B6' }
+const FIXED_STATUS_COLORS = {
+  'Qualified':       { bg: 'FFDCFCE7', text: 'FF166534', tab: 'FF22C55E', header: 'FF166534' },
+  'Disqualified':    { bg: 'FFFEE2E2', text: 'FF991B1B', tab: 'FFEF4444', header: 'FF991B1B' },
+  'Call Back Later': { bg: 'FFFEF3C7', text: 'FF92400E', tab: 'FFF59E0B', header: 'FF92400E' },
+  'DNC':             { bg: 'FFEDE9FE', text: 'FF5B21B6', tab: 'FF8B5CF6', header: 'FF5B21B6' },
 };
+
+// Deterministic color palette for custom statuses
+const DYN_PALETTE = [
+  { bg: 'FFE0F2FE', text: 'FF075985', tab: 'FF06B6D4', header: 'FF075985' },
+  { bg: 'FFD1FAE5', text: 'FF065F46', tab: 'FF10B981', header: 'FF065F46' },
+  { bg: 'FFFFF7ED', text: 'FF9A3412', tab: 'FFF97316', header: 'FF9A3412' },
+  { bg: 'FFFCE7F3', text: 'FF9D174D', tab: 'FFEC4899', header: 'FF9D174D' },
+  { bg: 'FFEFF6FF', text: 'FF1E40AF', tab: 'FF3B82F6', header: 'FF1E40AF' },
+  { bg: 'FFF0FDF4', text: 'FF14532D', tab: 'FF14B8A6', header: 'FF14532D' },
+];
+
+function statusColors(status) {
+  if (FIXED_STATUS_COLORS[status]) return FIXED_STATUS_COLORS[status];
+  let h = 0;
+  for (const c of (status || '')) h = (h * 31 + c.charCodeAt(0)) & 0xffffffff;
+  return DYN_PALETTE[Math.abs(h) % DYN_PALETTE.length];
+}
 
 function thinBorder() {
   return {
@@ -90,27 +107,13 @@ router.get('/:jobId', async (req, res) => {
   // Spacer
   summary.getRow(4).height = 8;
 
-  // Stats section
-  const statsData = [
-    ['Total Recordings', job.total_urls],
-    ['Qualified', job.qualified],
-    ['Disqualified', job.disqualified],
-    ['Call Back Later', job.callback],
-    ['DNC (Do Not Call)', job.dnc],
-    ['Errors', job.errors],
-  ];
-
-  const statsLabels = {
-    'Qualified': STATUS_COLORS['Qualified'],
-    'Disqualified': STATUS_COLORS['Disqualified'],
-    'Call Back Later': STATUS_COLORS['Call Back Later'],
-    'DNC (Do Not Call)': STATUS_COLORS['DNC'],
-  };
+  // Dynamic breakdown from recordings
+  const breakdown = db.getJobStatusBreakdown(job.id);
 
   let row = 5;
   // Stats header
   const statsHeaderRow = summary.getRow(row);
-  summary.getCell(`A${row}`).value = 'Metric';
+  summary.getCell(`A${row}`).value = 'Status';
   summary.getCell(`B${row}`).value = 'Count';
   for (const col of ['A', 'B']) {
     const c = summary.getCell(`${col}${row}`);
@@ -122,40 +125,48 @@ router.get('/:jobId', async (req, res) => {
   statsHeaderRow.height = 26;
   row++;
 
-  for (const [label, value] of statsData) {
+  // Total first
+  const totalRowEl = summary.getRow(row);
+  summary.getCell(`A${row}`).value = 'Total Recordings';
+  summary.getCell(`B${row}`).value = job.total_urls;
+  summary.getCell(`A${row}`).font = { name: FONT_MAIN, size: 11 };
+  summary.getCell(`B${row}`).font = { name: FONT_MAIN, size: 12, bold: true };
+  summary.getCell(`B${row}`).alignment = { horizontal: 'center' };
+  summary.getCell(`A${row}`).border = thinBorder();
+  summary.getCell(`B${row}`).border = thinBorder();
+  totalRowEl.height = 24;
+  row++;
+
+  // Dynamic status rows
+  for (const { lead_status, count } of breakdown) {
+    const sc = statusColors(lead_status);
     const r = summary.getRow(row);
     const cellA = summary.getCell(`A${row}`);
     const cellB = summary.getCell(`B${row}`);
-
-    cellA.value = label;
-    cellB.value = value;
-    cellA.font = { name: FONT_MAIN, size: 11 };
-    cellB.font = { name: FONT_MAIN, size: 11, bold: true };
-    cellB.alignment = { horizontal: 'center' };
-
-    // Color status rows
-    const sc = statsLabels[label];
-    if (sc) {
-      cellA.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: sc.bg } };
-      cellB.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: sc.bg } };
-      cellA.font = { name: FONT_MAIN, size: 11, color: { argb: sc.text } };
-      cellB.font = { name: FONT_MAIN, size: 11, bold: true, color: { argb: sc.text } };
-    } else if (label === 'Total Recordings') {
-      cellB.font = { name: FONT_MAIN, size: 12, bold: true };
-    }
-
+    cellA.value = lead_status;
+    cellB.value = count;
+    cellA.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: sc.bg } };
+    cellB.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: sc.bg } };
+    cellA.font = { name: FONT_MAIN, size: 11, color: { argb: sc.text } };
+    cellB.font = { name: FONT_MAIN, size: 11, bold: true, color: { argb: sc.text } };
     cellA.border = thinBorder();
     cellB.border = thinBorder();
+    cellB.alignment = { horizontal: 'center' };
     r.height = 24;
     row++;
   }
 
-  // Qualification rate
-  row += 1;
-  summary.mergeCells(`A${row}:B${row}`);
-  const qualRate = job.total_urls > 0 ? ((job.qualified / job.total_urls) * 100).toFixed(1) : '0.0';
-  summary.getCell(`A${row}`).value = `Qualification Rate: ${qualRate}%`;
-  summary.getCell(`A${row}`).font = { name: FONT_MAIN, size: 13, bold: true, color: { argb: 'FF0F172A' } };
+  if (job.errors > 0) {
+    summary.getCell(`A${row}`).value = 'Errors';
+    summary.getCell(`B${row}`).value = job.errors;
+    summary.getCell(`A${row}`).font = { name: FONT_MAIN, size: 11 };
+    summary.getCell(`B${row}`).font = { name: FONT_MAIN, size: 11, bold: true };
+    summary.getCell(`B${row}`).alignment = { horizontal: 'center' };
+    summary.getCell(`A${row}`).border = thinBorder();
+    summary.getCell(`B${row}`).border = thinBorder();
+    summary.getRow(row).height = 24;
+    row++;
+  }
 
   // ══════════════════════════════════════════════════════════════
   // SHEET 2: All Results
@@ -241,9 +252,9 @@ router.get('/:jobId', async (req, res) => {
       if (col > 0) dataRow.getCell(col).alignment = { vertical: 'middle', horizontal: 'center' };
     });
 
-    // Status cell — colored badge style
+    // Status cell — dynamically coloured
     const statusCell = dataRow.getCell('status');
-    const sc = STATUS_COLORS[rec.lead_status];
+    const sc = rec.lead_status ? statusColors(rec.lead_status) : null;
     if (sc) {
       statusCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: sc.bg } };
       statusCell.font = { name: FONT_MAIN, size: 10, bold: true, color: { argb: sc.text } };
@@ -270,121 +281,60 @@ router.get('/:jobId', async (req, res) => {
   sheet.autoFilter = { from: 'A1', to: `O${recordings.length + 1}` };
 
   // ══════════════════════════════════════════════════════════════
-  // SHEET 3: Qualified Only
+  // SHEETS 3+: One sheet per status (dynamic — whatever the AI returned)
   // ══════════════════════════════════════════════════════════════
-  const qualified = recordings.filter(r => r.lead_status === 'Qualified');
-  if (qualified.length > 0) {
-    const qSheet = workbook.addWorksheet('Qualified Leads', {
-      properties: { tabColor: { argb: 'FF22C55E' } },
+  for (const { lead_status } of breakdown) {
+    const group = recordings.filter(r => r.lead_status === lead_status);
+    if (group.length === 0) continue;
+
+    const sc = statusColors(lead_status);
+    // Safe sheet name (max 31 chars, no special chars)
+    const sheetName = lead_status.replace(/[\\\/\?\*\[\]:]/g, '').substring(0, 31);
+
+    const gSheet = workbook.addWorksheet(sheetName, {
+      properties: { tabColor: { argb: sc.tab } },
       views: [{ state: 'frozen', ySplit: 1 }]
     });
 
-    const qCols = [
-      { header: '#',               key: 'num',      width: 6  },
-      { header: 'SID',             key: 'sid',      width: 36 },
-      { header: 'Prospect Name',   key: 'name',     width: 24 },
-      { header: 'Vehicle',         key: 'vehicle',  width: 24 },
-      { header: 'Vehicle Use',     key: 'use',      width: 14 },
-      { header: 'Current Insurer', key: 'insurer',  width: 22 },
-      { header: 'Reason',          key: 'reason',   width: 40 },
-      { header: 'Recording',       key: 'url',      width: 36 },
-      { header: 'Transcript',      key: 'transcript', width: 30 },
-    ];
-
-    qSheet.columns = qCols;
-
-    const qHeaderRow = qSheet.getRow(1);
-    qHeaderRow.height = 30;
-    qHeaderRow.eachCell((cell) => {
-      cell.font = { name: FONT_MAIN, size: 11, bold: true, color: { argb: COLOR_HEADER_TEXT } };
-      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF166534' } };
-      cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
-      cell.border = thinBorder();
-    });
-
-    qualified.forEach((rec, i) => {
-      let a = {};
-      try { a = JSON.parse(rec.analysis); } catch (e) {}
-
-      const r = qSheet.addRow({
-        num: i + 1,
-        sid: extractSid(rec.url),
-        name: a.prospect_name || '-',
-        vehicle: a.vehicle_make || '-',
-        use: a.vehicle_use || '-',
-        insurer: a.current_insurer || '-',
-        reason: a.status_reason || '-',
-        url: rec.url,
-        transcript: `${baseUrl}/#transcript/${rec.id}`
-      });
-
-      r.height = 22;
-      const bg = i % 2 === 0 ? 'FFDCFCE7' : 'FFF0FDF4';
-      r.eachCell(cell => {
-        cell.font = { name: FONT_MAIN, size: 10 };
-        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
-        cell.border = thinBorder();
-        cell.alignment = { vertical: 'middle' };
-      });
-
-      // Hyperlinks
-      const urlCell = r.getCell('url');
-      urlCell.value = { text: 'Play Recording', hyperlink: rec.url };
-      urlCell.font = { name: FONT_MAIN, size: 10, color: { argb: 'FF166534' }, underline: true };
-
-      const tCell = r.getCell('transcript');
-      tCell.value = { text: 'View Transcript', hyperlink: `${baseUrl}/#transcript/${rec.id}` };
-      tCell.font = { name: FONT_MAIN, size: 10, color: { argb: 'FF166534' }, underline: true };
-    });
-  }
-
-  // ══════════════════════════════════════════════════════════════
-  // SHEET 4: Callbacks
-  // ══════════════════════════════════════════════════════════════
-  const callbacks = recordings.filter(r => r.lead_status === 'Call Back Later');
-  if (callbacks.length > 0) {
-    const cbSheet = workbook.addWorksheet('Callbacks', {
-      properties: { tabColor: { argb: 'FFF59E0B' } },
-      views: [{ state: 'frozen', ySplit: 1 }]
-    });
-
-    const cbCols = [
-      { header: '#',             key: 'num',      width: 6  },
-      { header: 'SID',           key: 'sid',      width: 36 },
-      { header: 'Prospect Name', key: 'name',     width: 24 },
-      { header: 'Callback Time', key: 'callback', width: 24 },
-      { header: 'Reason',        key: 'reason',   width: 44 },
-      { header: 'Recording',     key: 'url',      width: 36 },
+    gSheet.columns = [
+      { header: '#',             key: 'num',        width: 6  },
+      { header: 'SID',           key: 'sid',        width: 36 },
+      { header: 'Prospect Name', key: 'name',       width: 24 },
+      { header: 'Reason',        key: 'reason',     width: 44 },
+      { header: 'Callback Time', key: 'callback',   width: 22 },
+      { header: 'Recording',     key: 'url',        width: 36 },
       { header: 'Transcript',    key: 'transcript', width: 30 },
     ];
 
-    cbSheet.columns = cbCols;
-
-    const cbHeaderRow = cbSheet.getRow(1);
-    cbHeaderRow.height = 30;
-    cbHeaderRow.eachCell((cell) => {
+    const hRow = gSheet.getRow(1);
+    hRow.height = 30;
+    hRow.eachCell((cell) => {
       cell.font = { name: FONT_MAIN, size: 11, bold: true, color: { argb: COLOR_HEADER_TEXT } };
-      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF92400E' } };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: sc.header } };
       cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
       cell.border = thinBorder();
     });
 
-    callbacks.forEach((rec, i) => {
+    // Alternate row colors: light/lighter version of status color
+    const bgEven = sc.bg;
+    const bgOdd  = 'FFFFFFFF';
+
+    group.forEach((rec, i) => {
       let a = {};
       try { a = JSON.parse(rec.analysis); } catch (e) {}
 
-      const r = cbSheet.addRow({
+      const r = gSheet.addRow({
         num: i + 1,
         sid: extractSid(rec.url),
         name: a.prospect_name || '-',
-        callback: a.callback_time || '-',
         reason: a.status_reason || '-',
+        callback: a.callback_time || '-',
         url: rec.url,
         transcript: `${baseUrl}/#transcript/${rec.id}`
       });
 
       r.height = 22;
-      const bg = i % 2 === 0 ? 'FFFEF3C7' : 'FFFFFBEB';
+      const bg = i % 2 === 0 ? bgEven : bgOdd;
       r.eachCell(cell => {
         cell.font = { name: FONT_MAIN, size: 10 };
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
@@ -394,11 +344,11 @@ router.get('/:jobId', async (req, res) => {
 
       const urlCell = r.getCell('url');
       urlCell.value = { text: 'Play Recording', hyperlink: rec.url };
-      urlCell.font = { name: FONT_MAIN, size: 10, color: { argb: 'FF92400E' }, underline: true };
+      urlCell.font = { name: FONT_MAIN, size: 10, color: { argb: sc.text }, underline: true };
 
       const tCell = r.getCell('transcript');
       tCell.value = { text: 'View Transcript', hyperlink: `${baseUrl}/#transcript/${rec.id}` };
-      tCell.font = { name: FONT_MAIN, size: 10, color: { argb: 'FF92400E' }, underline: true };
+      tCell.font = { name: FONT_MAIN, size: 10, color: { argb: sc.text }, underline: true };
     });
   }
 
