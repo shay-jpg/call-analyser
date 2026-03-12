@@ -368,23 +368,27 @@ async function loadRecordings(jobId, page) {
           <thead>
             <tr>
               <th>#</th>
+              <th>SID</th>
               <th>Recording</th>
               <th>Status</th>
               <th>Reason</th>
               <th>Name</th>
+              <th>Transcript</th>
             </tr>
           </thead>
           <tbody>
             ${data.recordings.map((r, i) => {
-              const shortUrl = r.url.split('/').filter(Boolean).slice(-2, -1)[0] || '...';
               const idx = (data.page - 1) * 50 + i + 1;
+              const sid = extractSid(r.url);
               return `
-                <tr onclick="navigate('transcript/${r.id}')">
+                <tr>
                   <td>${idx}</td>
-                  <td title="${esc(r.url)}">${shortUrl.substring(0, 12)}...</td>
+                  <td class="sid-cell" title="${esc(r.url)}">${esc(sid)}</td>
+                  <td><a href="${esc(r.url)}" target="_blank" rel="noopener" class="recording-link" title="${esc(r.url)}">Play</a></td>
                   <td>${leadBadge(r.lead_status || r.status)}</td>
                   <td title="${esc(r.status_reason || '')}">${esc(r.status_reason || '-')}</td>
                   <td>${esc(r.prospect_name || '-')}</td>
+                  <td><a href="#transcript/${r.id}" class="transcript-link">View</a></td>
                 </tr>
               `;
             }).join('')}
@@ -526,6 +530,30 @@ async function deleteJob(jobId) {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────
+function extractSid(url) {
+  if (!url) return '-';
+  try {
+    // Extract path after last '/' and before '?' or end
+    const path = url.split('?')[0];
+    const segments = path.split('/').filter(Boolean);
+    const filename = segments[segments.length - 1] || '';
+    // Remove extension
+    const base = filename.replace(/\.[^.]+$/, '');
+    // Try to find a UUID (e.g. 550e8400-e29b-41d4-a716-446655440000)
+    const uuid = base.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+    if (uuid) return uuid[0];
+    // Try Twilio-style SID (2 uppercase letters + 32 hex chars, e.g. CA3499...)
+    const sid = base.match(/[A-Z]{2}[0-9a-f]{32}/i);
+    if (sid) return sid[0];
+    // Take the first underscore-separated segment if it looks like an ID
+    const firstPart = base.split('_')[0];
+    if (firstPart && firstPart.length >= 8) return firstPart;
+    return base || '-';
+  } catch (e) {
+    return '-';
+  }
+}
+
 function esc(str) {
   const div = document.createElement('div');
   div.textContent = str;

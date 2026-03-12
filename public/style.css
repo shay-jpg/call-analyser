@@ -213,7 +213,39 @@ td {
 }
 
 tr:hover td { background: rgba(96, 165, 250, 0.04); }
-tr { cursor: pointer; }
+
+.sid-cell {
+  font-family: monospace;
+  font-size: 11px;
+  color: var(--text-dim);
+  max-width: 160px;
+}
+
+.recording-link,
+.transcript-link {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: opacity 0.15s;
+}
+
+.recording-link {
+  background: rgba(96, 165, 250, 0.15);
+  color: var(--accent);
+}
+
+.transcript-link {
+  background: rgba(139, 92, 246, 0.15);
+  color: var(--purple);
+}
+
+.recording-link:hover,
+.transcript-link:hover {
+  opacity: 0.8;
+}
 
 /* ─── Status badges ────────────────────────────────────────── */
 .badge {

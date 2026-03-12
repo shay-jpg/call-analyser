@@ -4,6 +4,25 @@ const db = require('../lib/db');
 
 const router = express.Router();
 
+function extractSid(url) {
+  if (!url) return '-';
+  try {
+    const path = url.split('?')[0];
+    const segments = path.split('/').filter(Boolean);
+    const filename = segments[segments.length - 1] || '';
+    const base = filename.replace(/\.[^.]+$/, '');
+    const uuid = base.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+    if (uuid) return uuid[0];
+    const sid = base.match(/[A-Z]{2}[0-9a-f]{32}/i);
+    if (sid) return sid[0];
+    const firstPart = base.split('_')[0];
+    if (firstPart && firstPart.length >= 8) return firstPart;
+    return base || '-';
+  } catch (e) {
+    return '-';
+  }
+}
+
 const FONT_MAIN = 'Calibri';
 const COLOR_HEADER_BG = 'FF1E293B';
 const COLOR_HEADER_TEXT = 'FFFFFFFF';
@@ -148,6 +167,7 @@ router.get('/:jobId', async (req, res) => {
 
   const columns = [
     { header: '#',               key: 'num',        width: 6  },
+    { header: 'SID',             key: 'sid',        width: 36 },
     { header: 'Status',          key: 'status',     width: 16 },
     { header: 'Prospect Name',   key: 'name',       width: 22 },
     { header: 'Reason',          key: 'reason',     width: 42 },
@@ -187,6 +207,7 @@ router.get('/:jobId', async (req, res) => {
 
     const dataRow = sheet.addRow({
       num: i + 1,
+      sid: extractSid(rec.url),
       status: rec.lead_status || '-',
       name: a.prospect_name || '-',
       reason: a.status_reason || '-',
@@ -246,7 +267,7 @@ router.get('/:jobId', async (req, res) => {
   });
 
   // Auto-filter on all columns
-  sheet.autoFilter = { from: 'A1', to: `N${recordings.length + 1}` };
+  sheet.autoFilter = { from: 'A1', to: `O${recordings.length + 1}` };
 
   // ══════════════════════════════════════════════════════════════
   // SHEET 3: Qualified Only
@@ -260,6 +281,7 @@ router.get('/:jobId', async (req, res) => {
 
     const qCols = [
       { header: '#',               key: 'num',      width: 6  },
+      { header: 'SID',             key: 'sid',      width: 36 },
       { header: 'Prospect Name',   key: 'name',     width: 24 },
       { header: 'Vehicle',         key: 'vehicle',  width: 24 },
       { header: 'Vehicle Use',     key: 'use',      width: 14 },
@@ -286,6 +308,7 @@ router.get('/:jobId', async (req, res) => {
 
       const r = qSheet.addRow({
         num: i + 1,
+        sid: extractSid(rec.url),
         name: a.prospect_name || '-',
         vehicle: a.vehicle_make || '-',
         use: a.vehicle_use || '-',
@@ -327,6 +350,7 @@ router.get('/:jobId', async (req, res) => {
 
     const cbCols = [
       { header: '#',             key: 'num',      width: 6  },
+      { header: 'SID',           key: 'sid',      width: 36 },
       { header: 'Prospect Name', key: 'name',     width: 24 },
       { header: 'Callback Time', key: 'callback', width: 24 },
       { header: 'Reason',        key: 'reason',   width: 44 },
@@ -351,6 +375,7 @@ router.get('/:jobId', async (req, res) => {
 
       const r = cbSheet.addRow({
         num: i + 1,
+        sid: extractSid(rec.url),
         name: a.prospect_name || '-',
         callback: a.callback_time || '-',
         reason: a.status_reason || '-',
