@@ -2,9 +2,16 @@ require('dotenv').config();
 const express = require('express');
 const cookieParser = require('cookie-parser');
 const path = require('path');
-const { initDb, migrate } = require('./lib/db');
+const { initDb, migrate, purgeOldRecordings } = require('./lib/db');
 const { authMiddleware, loginHandler } = require('./lib/auth');
-const { resumeInterruptedJobs } = require('./lib/processor');
+const { resumeInterruptedJobs, cleanupOrphanedTempFiles } = require('./lib/processor');
+
+const RETENTION_DAYS = parseInt(process.env.DATA_RETENTION_DAYS) || 30;
+
+function runMaintenance() {
+  cleanupOrphanedTempFiles();
+  purgeOldRecordings(RETENTION_DAYS);
+}
 
 async function start() {
   // Initialize database first
@@ -42,6 +49,10 @@ async function start() {
 
     // Resume any interrupted jobs
     resumeInterruptedJobs();
+
+    // Run maintenance immediately, then every 24h
+    runMaintenance();
+    setInterval(runMaintenance, 24 * 60 * 60 * 1000);
   });
 }
 
