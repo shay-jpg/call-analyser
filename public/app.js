@@ -131,11 +131,108 @@ function renderLogin() {
 
 // ─── Dashboard ────────────────────────────────────────────────────
 async function renderDashboard() {
-  renderShell('<div class="page-header"><h1>Dashboard</h1><button class="btn btn-primary" onclick="navigate(\'new\')">+ New Analysis</button></div><div id="job-list"><div class="spinner"></div></div>');
+  renderShell(`
+    <div class="page-header">
+      <h1>Overview</h1>
+      <div style="display:flex;align-items:center;gap:8px">
+        <div class="period-toggle" id="period-toggle">
+          <button class="period-btn active" data-days="7">7d</button>
+          <button class="period-btn" data-days="30">30d</button>
+          <button class="period-btn" data-days="all">All</button>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="navigate('new')">+ New Analysis</button>
+      </div>
+    </div>
+    <div id="kpi-panel"><div class="spinner"></div></div>
+    <div id="flags-section"></div>
+    <div class="section-header"><h2>Recent Jobs</h2></div>
+    <div id="job-list"><div class="spinner"></div></div>
+  `);
+
+  document.getElementById('period-toggle').addEventListener('click', e => {
+    const btn = e.target.closest('.period-btn');
+    if (!btn) return;
+    document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    loadKpiPanel(btn.dataset.days);
+  });
+
+  await Promise.all([loadKpiPanel('7'), loadRedFlags(), loadJobList()]);
+}
+
+async function loadKpiPanel(days) {
+  const panel = document.getElementById('kpi-panel');
+  if (!panel) return;
+  panel.innerHTML = '<div class="spinner"></div>';
+
+  try {
+    const stats = await apiJSON(`/jobs/stats?days=${days}`);
+    const c = stats.current;
+    const p = stats.prev;
+
+    const qualRate = c.total_calls > 0 ? c.qualified / c.total_calls * 100 : 0;
+    const dncRate  = c.total_calls > 0 ? c.dnc       / c.total_calls * 100 : 0;
+    const prevQual = (p && p.total_calls > 0) ? p.qualified / p.total_calls * 100 : null;
+    const prevDnc  = (p && p.total_calls > 0) ? p.dnc       / p.total_calls * 100 : null;
+
+    const pctDiff = (cur, prv) => (!prv || prv === 0) ? null : ((cur - prv) / prv * 100).toFixed(1) + '%';
+    const ppDiff  = (cur, prv) => prv === null ? null : (cur - prv).toFixed(1) + 'pp';
+
+    panel.innerHTML = `<div class="kpi-grid">
+      ${kpiCard('Total Calls',        fmtNum(c.total_calls),     pctDiff(c.total_calls, p && p.total_calls),   'var(--accent)', false)}
+      ${kpiCard('Qualification Rate', qualRate.toFixed(1) + '%', ppDiff(qualRate, prevQual),                   'var(--green)',  false)}
+      ${kpiCard('Disqualified',       fmtNum(c.disqualified),    pctDiff(c.disqualified, p && p.disqualified), 'var(--text)',   true)}
+      ${kpiCard('Callback',           fmtNum(c.callback),        null,                                          'var(--amber)', false)}
+      ${kpiCard('DNC Rate',           dncRate.toFixed(1) + '%',  ppDiff(dncRate, prevDnc),                     'var(--purple)', true)}
+      ${kpiCard('Errors',             fmtNum(c.errors),          pctDiff(c.errors, p && p.errors),             'var(--red)',    true)}
+    </div>`;
+  } catch (e) {
+    panel.innerHTML = '<p style="color:var(--red)">Failed to load stats</p>';
+  }
+}
+
+async function loadRedFlags() {
+  const section = document.getElementById('flags-section');
+  if (!section) return;
+
+  try {
+    const flags = await apiJSON('/recordings/flags?limit=10');
+    if (flags.length === 0) { section.innerHTML = ''; return; }
+
+    section.innerHTML = `
+      <div class="section-header" style="margin-top:8px">
+        <h2>Recent Red Flags <span style="font-size:11px;font-weight:400;color:var(--text-dim);margin-left:6px;text-transform:none;letter-spacing:0">DNC &amp; Errors</span></h2>
+      </div>
+      <div class="table-wrap" style="margin-bottom:24px">
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>Job</th><th>Status</th><th>Reason</th><th>Recording</th><th>Time</th></tr></thead>
+            <tbody>
+              ${flags.map(f => `
+                <tr>
+                  <td><a href="#results/${f.job_id}" style="color:var(--text)">${esc(f.job_name)}</a></td>
+                  <td>${leadBadge(f.lead_status || 'error')}</td>
+                  <td style="max-width:220px" title="${esc(f.status_reason || '')}">${esc(f.status_reason || '-')}</td>
+                  <td><a href="${esc(f.url)}" target="_blank" rel="noopener" class="recording-link">Play</a></td>
+                  <td style="color:var(--text-dim);white-space:nowrap">${formatDate(f.finished_at)}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+  } catch (e) {
+    section.innerHTML = '';
+  }
+}
+
+async function loadJobList() {
+  const container = document.getElementById('job-list');
+  if (!container) return;
 
   try {
     const jobs = await apiJSON('/jobs');
-    const container = document.getElementById('job-list');
 
     if (jobs.length === 0) {
       container.innerHTML = `
@@ -178,8 +275,33 @@ async function renderDashboard() {
       `;
     }).join('')}</div>`;
   } catch (e) {
-    document.getElementById('job-list').innerHTML = `<p style="color:var(--red)">Failed to load jobs</p>`;
+    container.innerHTML = '<p style="color:var(--red)">Failed to load jobs</p>';
   }
+}
+
+// ─── KPI helpers ───────────────────────────────────────────────────
+function fmtNum(n) { return (n || 0).toLocaleString(); }
+
+function kpiCard(label, value, changeTxt, color, invertSentiment) {
+  let changeHtml = '';
+  if (changeTxt !== null && changeTxt !== undefined) {
+    const num = parseFloat(changeTxt);
+    let cls = 'kpi-change-neutral';
+    let arrow = '→';
+    if (!isNaN(num) && Math.abs(num) >= 0.05) {
+      const positive = num > 0;
+      const isGood = invertSentiment ? !positive : positive;
+      cls = isGood ? 'kpi-change-good' : 'kpi-change-bad';
+      arrow = positive ? '↑' : '↓';
+    }
+    const sign = (!isNaN(num) && num > 0) ? '+' : '';
+    changeHtml = `<div class="kpi-change ${cls}">${arrow} ${sign}${changeTxt} vs prior</div>`;
+  }
+  return `<div class="kpi-card">
+    <div class="kpi-num" style="color:${color}">${esc(String(value))}</div>
+    <div class="kpi-label">${esc(label)}</div>
+    ${changeHtml}
+  </div>`;
 }
 
 // ─── New Analysis ─────────────────────────────────────────────────
@@ -514,17 +636,76 @@ function updateResultsHeader(job) {
 
 function updateResultsStats(job) {
   const breakdown = job.breakdown || [];
+  const total = breakdown.reduce((s, b) => s + b.count, 0) || job.total_urls || 1;
   const statCards = breakdown.map(({ lead_status, count }) => {
     const c = statusColor(lead_status);
-    return `<div class="stat"><div class="num" style="color:${c}">${count}</div><div class="label">${esc(lead_status)}</div></div>`;
+    const pct = (count / total * 100).toFixed(1);
+    return `<div class="stat"><div class="num" style="color:${c}">${count}</div><div class="label">${esc(lead_status)}</div><div style="font-size:11px;color:var(--text-dim);margin-top:2px">${pct}%</div></div>`;
   }).join('');
+
+  const donut = renderDonut(breakdown);
+
   document.getElementById('results-stats').innerHTML = `
-    <div class="stats">
-      ${statCards}
-      ${job.errors > 0 ? `<div class="stat"><div class="num" style="color:var(--red)">${job.errors}</div><div class="label">Errors</div></div>` : ''}
-      <div class="stat"><div class="num">${job.total_urls}</div><div class="label">Total</div></div>
+    <div class="stats-with-donut">
+      <div class="stats">
+        ${statCards}
+        ${job.errors > 0 ? `<div class="stat"><div class="num" style="color:var(--red)">${job.errors}</div><div class="label">Errors</div></div>` : ''}
+        <div class="stat"><div class="num">${job.total_urls}</div><div class="label">Total</div></div>
+      </div>
+      ${donut ? `<div class="donut-wrap">${donut}${renderDonutLegend(breakdown)}</div>` : ''}
     </div>
   `;
+}
+
+// ─── Donut chart ───────────────────────────────────────────────────
+function renderDonut(breakdown, size = 140) {
+  if (!breakdown || breakdown.length === 0) return '';
+  const total = breakdown.reduce((s, b) => s + b.count, 0);
+  if (total === 0) return '';
+
+  const cx = size / 2, cy = size / 2;
+  const R = size * 0.44, r = size * 0.27;
+
+  function polar(radius, angleDeg) {
+    const rad = (angleDeg - 90) * Math.PI / 180;
+    return { x: cx + radius * Math.cos(rad), y: cy + radius * Math.sin(rad) };
+  }
+
+  function slicePath(startDeg, endDeg) {
+    if (endDeg - startDeg >= 360) endDeg = 359.99;
+    const p1 = polar(R, startDeg), p2 = polar(R, endDeg);
+    const p3 = polar(r, endDeg),   p4 = polar(r, startDeg);
+    const lg = (endDeg - startDeg) > 180 ? 1 : 0;
+    return `M${p1.x},${p1.y} A${R},${R} 0 ${lg} 1 ${p2.x},${p2.y} L${p3.x},${p3.y} A${r},${r} 0 ${lg} 0 ${p4.x},${p4.y} Z`;
+  }
+
+  const gap = breakdown.length > 1 ? 2 : 0;
+  let angle = 0, paths = '';
+
+  for (const b of breakdown) {
+    const sweep = (b.count / total) * 360;
+    const color = statusColor(b.lead_status);
+    if (sweep > gap * 2) {
+      paths += `<path d="${slicePath(angle + gap / 2, angle + sweep - gap / 2)}" fill="${color}"/>`;
+    }
+    angle += sweep;
+  }
+
+  return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" style="flex-shrink:0">${paths}</svg>`;
+}
+
+function renderDonutLegend(breakdown) {
+  const total = breakdown.reduce((s, b) => s + b.count, 0);
+  if (total === 0) return '';
+  return `<div class="donut-legend">${breakdown.map(b => {
+    const c = statusColor(b.lead_status);
+    const pct = (b.count / total * 100).toFixed(1);
+    return `<div class="legend-item">
+      <span class="legend-dot" style="background:${c}"></span>
+      <span class="legend-label">${esc(b.lead_status)}</span>
+      <span class="legend-pct">${pct}%</span>
+    </div>`;
+  }).join('')}</div>`;
 }
 
 function renderFilters(jobId, breakdown) {

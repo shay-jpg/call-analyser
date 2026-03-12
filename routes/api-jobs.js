@@ -18,6 +18,14 @@ router.get('/default-prompt', (req, res) => {
   res.json({ prompt: DEFAULT_SYSTEM_PROMPT });
 });
 
+// Aggregate stats with optional date range
+router.get('/stats', (req, res) => {
+  const { days } = req.query;
+  const d = (days && days !== 'all') ? parseInt(days) : null;
+  if (d !== null && (isNaN(d) || d <= 0)) return res.status(400).json({ error: 'Invalid days parameter' });
+  res.json(db.getAggregateStats(d));
+});
+
 // Create new job
 router.post('/', (req, res) => {
   const { name, urls, systemPrompt } = req.body;
