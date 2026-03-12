@@ -457,6 +457,7 @@ function applyOptimization(idx, fix) {
 
 // ─── Results ──────────────────────────────────────────────────────
 let currentFilter = null;
+let currentBreakdown = [];
 
 async function renderResults(jobId) {
   if (!jobId) return navigate('dashboard');
@@ -471,12 +472,14 @@ async function renderResults(jobId) {
   `);
 
   currentFilter = null;
+  currentBreakdown = [];
 
   try {
     const job = await apiJSON(`/jobs/${jobId}`);
+    currentBreakdown = job.breakdown || [];
     updateResultsHeader(job);
     updateResultsStats(job);
-    renderFilters(jobId, job.breakdown);
+    renderFilters(jobId, currentBreakdown);
     await loadRecordings(jobId, 1);
 
     // Connect SSE if job is running
@@ -611,7 +614,7 @@ window.loadRecordings = loadRecordings;
 
 function setFilter(jobId, value) {
   currentFilter = value;
-  renderFilters(jobId);
+  renderFilters(jobId, currentBreakdown);
   loadRecordings(jobId, 1);
 }
 
@@ -626,17 +629,19 @@ function connectSSE(jobId) {
 
       if (data.type === 'progress') {
         const job = await apiJSON(`/jobs/${jobId}`);
+        currentBreakdown = job.breakdown || [];
         updateResultsHeader(job);
         updateResultsStats(job);
-        renderFilters(jobId, job.breakdown);
+        renderFilters(jobId, currentBreakdown);
         loadRecordings(jobId, 1);
       }
 
       if (data.type === 'complete') {
         const job = await apiJSON(`/jobs/${jobId}`);
+        currentBreakdown = job.breakdown || [];
         updateResultsHeader(job);
         updateResultsStats(job);
-        renderFilters(jobId, job.breakdown);
+        renderFilters(jobId, currentBreakdown);
         loadRecordings(jobId, 1);
         if (currentSSE) { currentSSE.close(); currentSSE = null; }
       }
